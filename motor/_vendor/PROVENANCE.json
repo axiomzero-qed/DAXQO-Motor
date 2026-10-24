@@ -1,0 +1,8 @@
+{
+  "source_repository": "https://github.com/axiomzero-qed/DAXQO-Trajectory-Collector",
+  "source_version": "0.1.0",
+  "source_file": "trajectory/privacy.py",
+  "sha256": "46b09156474ff0e30e552c1cc1ab34a1506f9fff7cbfedbdbbe8155f4b5d533c",
+  "license": "MIT",
+  "copyright": "2026 DAXQO contributors"
+}

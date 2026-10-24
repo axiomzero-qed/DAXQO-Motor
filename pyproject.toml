@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daxqo-motor"
+version = "0.1.0"
+description = "Harness-independent GUI exploration, verified local navigation and persistent app maps"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "DAXQO contributors"}]
+requires-python = ">=3.10"
+dependencies = []
+keywords = ["android", "agent", "navigation", "mcp"]
+
+[project.optional-dependencies]
+collector = ["daxqo-trajectory-collector>=0.1,<0.2"]
+dev = ["build>=1.2", "mcp>=1.12,<2"]
+
+[project.scripts]
+daxqo-motor = "motor.cli:main"
+daxqo-motor-mcp = "motor.mcp_server:main"
+
+[project.urls]
+Repository = "https://github.com/axiomzero-qed/DAXQO-Motor"
+Issues = "https://github.com/axiomzero-qed/DAXQO-Motor/issues"
+
+[tool.setuptools.packages.find]
+include = ["motor*"]
+
+[tool.setuptools.package-data]
+"motor._vendor" = ["PROVENANCE.json"]

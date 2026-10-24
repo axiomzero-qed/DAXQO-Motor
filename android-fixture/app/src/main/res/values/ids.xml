@@ -1,0 +1,12 @@
+<resources>
+    <item name="motor_tab_home" type="id" />
+    <item name="motor_tab_products" type="id" />
+    <item name="motor_tab_favorites" type="id" />
+    <item name="motor_tab_profile" type="id" />
+    <item name="motor_tab_recommended" type="id" />
+    <item name="motor_tab_new" type="id" />
+    <item name="motor_bottom_navigation" type="id" />
+    <item name="motor_page_content" type="id" />
+    <item name="motor_products_scroll" type="id" />
+    <item name="motor_profile_extra_entry" type="id" />
+</resources>

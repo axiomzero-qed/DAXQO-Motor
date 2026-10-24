@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://daxqo.io/schemas/motor-policy-v0.1.json",
+  "title": "DAXQO Motor policy input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "page", "controls", "candidates"],
+  "properties": {
+    "schema_version": {"const": "daxqo.motor.policy/0.1"},
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "window", "title"],
+      "properties": {
+        "package": {"type": "string"},
+        "window": {"type": "string"},
+        "title": {"type": "string"}
+      }
+    },
+    "controls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["resource_id", "role", "text", "bounds", "enabled", "selected", "scrollable", "checkable", "checked", "editable"],
+        "properties": {
+          "resource_id": {"type": "string"},
+          "role": {"type": "string"},
+          "text": {"type": "string"},
+          "bounds": {"oneOf": [
+            {"type": "null"},
+            {"type": "array", "prefixItems": [
+              {"type": "number", "minimum": 0, "maximum": 1},
+              {"type": "number", "minimum": 0, "maximum": 1},
+              {"type": "number", "minimum": 0, "maximum": 1},
+              {"type": "number", "minimum": 0, "maximum": 1}
+            ], "minItems": 4, "maxItems": 4}
+          ]},
+          "enabled": {"type": "boolean"},
+          "selected": {"type": "boolean"},
+          "scrollable": {"type": "boolean"},
+          "checkable": {"type": "boolean"},
+          "checked": {"type": "boolean"},
+          "editable": {"type": "boolean"}
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "source", "score", "confidence"],
+        "properties": {
+          "action": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "selector", "direction", "purpose", "expected_text", "expected_page", "wait_ms"],
+            "properties": {
+              "kind": {"enum": ["CLICK", "SCROLL", "BACK", "WAIT"]},
+              "selector": {"oneOf": [
+                {"type": "null"},
+                {"type": "object", "additionalProperties": false,
+                 "properties": {"resource_id": {"type": "string"}, "text": {"type": "string"},
+                                "description": {"type": "string"}, "role": {"type": "string"}}}
+              ]},
+              "direction": {"type": "string"},
+              "purpose": {"enum": ["navigation", "observation", "task"]},
+              "expected_text": {"type": "string"},
+              "expected_page": {"type": "string"},
+              "wait_ms": {"type": "integer", "minimum": 0, "maximum": 10000},
+              "id": {"type": "string"}
+            }
+          },
+          "source": {"type": "string", "minLength": 1},
+          "score": {"type": ["number", "null"]},
+          "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+        }
+      }
+    }
+  }
+}
