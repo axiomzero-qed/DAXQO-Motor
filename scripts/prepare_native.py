@@ -15,6 +15,43 @@ DEFAULT_RECORDER = Path(os.environ.get('DAXQO_COLLECTOR_RECORDER',
     DEFAULT_SOURCE / 'android/app/src/main/java/io/daxqo/app/TrajectoryRecorder.java'))
 STAGE = ROOT / 'dist' / 'native'
 VERSION_CODE = 10
+ANDROID_MAX_VERSION_CODE = 2_100_000_000
+
+
+def parse_collector_base_code(gradle_text: str) -> int:
+    lines = [line for line in gradle_text.splitlines() if re.search(r"\bversionCode\b", line)]
+    if len(lines) != 1:
+        raise ValueError('Collector versionCode anchor changed')
+    match = re.fullmatch(r"\s*versionCode\s+project\.hasProperty\('trajectoryBuild'\)\s*\?\s*(\d+)\s*:\s*(\d+)\s*", lines[0])
+    if not match:
+        raise ValueError('Collector trajectory versionCode must retain its integer base-code condition')
+    trajectory_code, core_code = map(int, match.groups())
+    if any(not 1 <= code <= ANDROID_MAX_VERSION_CODE for code in (trajectory_code, core_code)):
+        raise ValueError('Collector base versionCode is outside the Android range')
+    return max(trajectory_code, core_code)
+
+
+def validate_version_code(version_code: int, base_code: int) -> None:
+    if not isinstance(version_code, int) or not 1 <= version_code <= ANDROID_MAX_VERSION_CODE:
+        raise ValueError('Invalid Motor APK version code (expected 1..2100000000)')
+    if version_code <= base_code:
+        raise ValueError(f'Motor version code {version_code} must exceed collector base code {base_code}')
+
+
+def select_motor_version_code(base_code: int, requested: int | None = None) -> int:
+    version_code = max(VERSION_CODE, base_code + 1) if requested is None else requested
+    validate_version_code(version_code, base_code)
+    return version_code
+
+
+def motor_version_gradle(gradle_text: str, version_code: int) -> str:
+    base_code = parse_collector_base_code(gradle_text)
+    validate_version_code(version_code, base_code)
+    pattern = r"(?m)^[ \t]*versionCode[ \t]+project\.hasProperty\('trajectoryBuild'\)[ \t]*\?[ \t]*\d+[ \t]*:[ \t]*\d+[ \t]*$"
+    result, count = re.subn(pattern, '        versionCode ' + str(version_code), gradle_text, count=1)
+    if count != 1:
+        raise ValueError('Collector versionCode anchor changed')
+    return result
 
 
 def replace(source: str, old: str, new: str, label: str) -> str:
@@ -115,7 +152,9 @@ SERVICE_METHODS = r'''
         }
     }
     private void motorEvent(AccessibilityEvent event) {
-        if (event == null) return;
+        // Framework/passive callbacks can arrive before Android finishes real service initialization.
+        // Do not touch framework state or optional Motor helpers until both instance fields exist.
+        if (event == null || motorGate == null || motorEvents == null) return;
         int type = event.getEventType();
         if (type == AccessibilityEvent.TYPE_TOUCH_INTERACTION_START && !motorGate.lease().isEmpty()) motorGate.revoke("manual_touch");
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && !motorGate.lease().isEmpty()) {
@@ -256,8 +295,14 @@ def overlay_bridge(text: str) -> str:
     return text
 
 
-def prepare(source: Path = DEFAULT_SOURCE, stage: Path = STAGE, recorder: Path | None = None) -> Path:
+def prepare(source: Path = DEFAULT_SOURCE, stage: Path = STAGE, recorder: Path | None = None,
+            version_code: int | None = None) -> Path:
     source, stage = source.resolve(), stage.resolve()
+    source_gradle = source / 'android' / 'app' / 'build.gradle'
+    if not source_gradle.is_file():
+        raise FileNotFoundError('Existing collector Android build.gradle is required (--source)')
+    source_base_code = parse_collector_base_code(source_gradle.read_text(encoding='utf-8'))
+    selected_version_code = select_motor_version_code(source_base_code, version_code)
     if not (source / 'android' / 'app' / 'src' / 'main' / 'java' / 'io' / 'daxqo' / 'app' / 'TrajectoryRecorder.java').is_file():
         raise FileNotFoundError('Existing collector native source is required (--source)')
     if stage == source or source in stage.parents or stage in source.parents:
@@ -291,12 +336,11 @@ def prepare(source: Path = DEFAULT_SOURCE, stage: Path = STAGE, recorder: Path |
     xml.write_text(value, encoding='utf-8', newline='\n')
     gradle = stage / 'android' / 'app' / 'build.gradle'
     value = gradle.read_text(encoding='utf-8')
-    pattern = r"versionCode project\.hasProperty\('trajectoryBuild'\) \? [0-9]+ : 5"
-    if len(re.findall(pattern, value)) != 1:
-        raise ValueError('Collector versionCode anchor changed')
-    value = re.sub(pattern, 'versionCode ' + str(VERSION_CODE), value, count=1)
-    gradle.write_text(value, encoding='utf-8', newline='\n')
-    (stage / 'overlay-manifest.json').write_text(json.dumps({'motor_version': '0.1', 'version_code': VERSION_CODE,
+    staged_base_code = parse_collector_base_code(value)
+    if staged_base_code != source_base_code:
+        raise ValueError('Collector base versionCode changed during staging')
+    gradle.write_text(motor_version_gradle(value, selected_version_code), encoding='utf-8', newline='\n')
+    (stage / 'overlay-manifest.json').write_text(json.dumps({'motor_version': '0.1', 'version_code': selected_version_code,
         'source': str(source), 'collector_recorder_source': str(recorder), 'source_sha256': manifests}, indent=2), encoding='utf-8')
     return stage
 
@@ -306,8 +350,10 @@ def main() -> int:
     parser.add_argument('--source', type=Path, default=DEFAULT_SOURCE)
     parser.add_argument('--stage', type=Path, default=STAGE)
     parser.add_argument('--collector-recorder', type=Path, help='Explicit recorder override; otherwise use --source content')
+    parser.add_argument('--version-code', type=int, default=None,
+                        help='Optional explicit Motor APK code; defaults to max(10, selected collector base + 1)')
     args = parser.parse_args()
-    print('Motor native source prepared: ' + str(prepare(args.source, args.stage, args.collector_recorder)))
+    print('Motor native source prepared: ' + str(prepare(args.source, args.stage, args.collector_recorder, args.version_code)))
     return 0
 
 
