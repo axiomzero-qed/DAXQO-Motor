@@ -21,6 +21,40 @@ bundle_spec.loader.exec_module(bundle)
 
 
 class NativeOverlayTests(unittest.TestCase):
+    def test_collector_base_code_parsing_and_motor_code_validation(self):
+        for gradle, effective_base in (
+            ("versionCode project.hasProperty('trajectoryBuild') ? 8 : 5", 8),
+            ("versionCode project.hasProperty('trajectoryBuild') ? 12 : 11", 12),
+        ):
+            self.assertEqual(overlay.parse_collector_base_code(gradle), effective_base)
+            self.assertEqual(overlay.motor_version_gradle(gradle, 13).strip(), "versionCode 13")
+        with self.assertRaises(ValueError):
+            overlay.parse_collector_base_code("versionCode project.hasProperty('trajectoryBuild') ? 12 : 5\nversionCode 11")
+        with self.assertRaises(ValueError):
+            overlay.parse_collector_base_code("versionCode project.hasProperty('trajectoryBuild') ? 2100000001 : 11")
+        for code in (0, 5, 11, 2_100_000_001):
+            with self.subTest(code=code), self.assertRaises(ValueError):
+                overlay.validate_version_code(code, 11)
+        overlay.validate_version_code(13, 11)
+
+    def test_omitted_motor_code_preserves_legacy_default_and_advances_new_base(self):
+        self.assertEqual(overlay.select_motor_version_code(5), 10)
+        self.assertEqual(overlay.select_motor_version_code(8), 10)
+        self.assertEqual(overlay.select_motor_version_code(12), 13)
+        self.assertEqual(overlay.select_motor_version_code(12, 14), 14)
+        with self.assertRaises(ValueError):
+            overlay.select_motor_version_code(12, 12)
+
+    def test_motor_passive_callback_guards_uninitialized_helpers_before_framework_access(self):
+        match = re.search(r"    private void motorEvent\(AccessibilityEvent event\) \{[\s\S]*?\n    \}", overlay.SERVICE_METHODS)
+        self.assertIsNotNone(match)
+        method = match.group(0)
+        guard = 'if (event == null || motorGate == null || motorEvents == null) return;'
+        self.assertIn(guard, method)
+        self.assertLess(method.index(guard), method.index('event.getEventType()'))
+        self.assertLess(method.index(guard), method.index('motorGate.lease()'))
+        self.assertLess(method.index(guard), method.index('motorEvents.changed('))
+
     def test_anchor_drift_fails_closed(self):
         with self.assertRaises(ValueError):
             overlay.overlay_service('new unrelated implementation')
